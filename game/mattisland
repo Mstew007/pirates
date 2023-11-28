@@ -1,1 +1,231 @@
+from game import location
+import game.config as config
+from game.display import announce
+import random
+import game.combat as combat
+import game.event as event
+from game.events import *
+from game.player import Player
+from game.context import Context
 
+class mainIsland (location.Location):
+
+    def __init__ (self, x, y, w):
+        super().__init__(x, y, w)
+        self.name = "island"
+        self.symbol = 'L'
+        self.visitable = True
+        self.starting_location = Beach(self)
+        self.locations = {}
+
+        self.locations["Beach"] = self.starting_location
+        self.locations["OakTree"] = OakTree(self)
+        self.locations["PalmTreeWest"] = PalmTreeWest(self)
+        self.locations["PalmTreeEast"] = PalmTreeEast(self)
+        self.locations["Shack"] = Shack(self)
+
+
+
+    def enter (self, ship):
+        print ("You have arrived at a small random island.")
+
+    def visit (self):
+        config.the_player.location = self.starting_location
+        config.the_player.location.enter()
+        super().visit()
+
+class Beach (location.SubLocation):
+    def __init__ (self, m):
+        super().__init__(m)
+        self.name = "Beach"
+        self.verbs['north'] = self
+        self.verbs['south'] = self
+
+        self.event_chance = 25
+        self.events.append(seagull.Seagull())
+
+    def enter (self):
+        announce ("You arrive at the beach of a peaceful island.\n" +
+                  "Your ship is docked at the south beach.\n")
+
+    def process_verb (self, verb, cmd_list, nouns):
+        if (verb == "south"):
+            announce ("You return to your ship.")
+            config.the_player.next_loc = config.the_player.ship
+            config.the_player.visiting = False
+        elif (verb == "north"):
+            config.the_player.next_loc = self.main_location.locations["Shack"]
+
+
+class Shack (location.SubLocation):
+    def __init__ (self, m):
+        super().__init__(m)
+        self.name = "Shack"
+        self.verbs['exit'] = self
+        self.verbs['leave'] = self
+        self.verbs['north'] = self
+        self.verbs['south'] = self
+        self.verbs['east'] = self
+        self.verbs['west'] = self
+
+    def enter (self):
+        description = "Welcome to the shack! be prepared!"
+        announce(description)
+
+    def process_verb (self, verb, cmd_list, nouns):
+        if (verb == "exit" or verb == "leave"):
+            config.the_player.next_loc = self.main_location.locations["Beach"]
+            config.the_player.go = True
+    def process_verb (self, verb, cmd_list, nouns):
+        if (verb == "south"):
+            announce ("You return to your ship.")
+            config.the_player.next_loc = config.the_player.ship
+            config.the_player.visiting = False
+        elif (verb == "north"):
+            config.the_player.next_loc = self.main_location.locations["OakTree"]
+        elif (verb == "east"):
+            config.the_player.next_loc = self.main_location.locations["PalmTreeEast"]
+        elif (verb == "west"):
+            config.the_player.next_loc = self.main_location.locations["PalmTreeWest"]
+
+class OakTree (location.SubLocation):
+    def __init__ (self, m):
+        super().__init__(m)
+        self.name = "OakTree"
+        self.verbs['north'] = self
+        self.oakUsed = False
+
+    def enter(self, ship):
+        print("welcome to Agent Oak Tree!")
+
+class PalmTreeWest (location.SubLocation):
+    def __init__ (self, m):
+        super().__init__(m)
+        self.name = "PalmTreeWest"
+        self.verbs['east'] = self
+
+        self.event_chance = 25
+        self.events.append(seagull.Seagull())
+
+    def enter (self):
+        description = "You walk up to the palm tree... Oh no! its a trap! your crew lose 50hp!."
+        announce(description)
+        for i in config.the_player.get_pirates():
+            i.inflict_damage(50, ' a trap')
+
+class PalmTreeEast (location.SubLocation):
+    def __init__ (self, m):
+        super().__init__(m)
+        self.name = "PalmTreeEast"
+        self.verbs['west'] = self
+
+        self.event_chance = 25
+        self.events.append(seagull.Seagull())
+
+    def enter (self):
+        description = "You walk up to the palm tree... Oh no! its a trap! your crew lose 50hp!."
+        announce(description)
+        for i in config.the_player.get_pirates():
+            i.inflict_damage(50, ' a trap')
+
+
+    def process_verb (self, verb, cmd_list, nouns):
+        if (verb == "west"):
+            config.the_player.next_loc = self.main_location.locations["shack"]
+
+
+    def HandleRiddles(self):
+        riddle = self.GetRiddleAndAnswer()
+        guesses = 3
+
+        # While the player still has guesses, ask for their answer and respond appropriately.
+        while guesses > 0:
+            print(riddle[0])
+            plural = ""
+            if(guesses != 1):
+                plural = "s"
+            
+            print(f"You may guess {guesses} more time{plural}.") 
+            choice = input("What is your guess? ")
+            if riddle[1] in choice:
+                self.RiddleReward()
+                announce("You have guessed correctly")
+                return
+            else:
+                guesses -= 1
+                announce("You have guessed incorrectly.")
+
+        if(guesses <= 0):
+            self.oakUsedUsed = True
+
+    def GetRiddleAndAnswer(self):
+        riddleList = [ # A list of tuples. The first item is the riddle, while the second item is the answer.
+            ("What is black and white and red all over?", "newspaper"),
+            ("What do you call a cow with no legs?", "ground beef"),
+            ("what has many rings but no finger?", "phone"),
+            ("what goes up but never goes down?", "age")
+            ]
+        return random.choice(riddleList)
+
+    def RiddleReward(self):
+        announce("You have guessed correctly. you have won the Gold!.")
+        for i in config.the_player.get_pirates():
+            i.lucky = True
+            i.sick = False
+            i.health = i.max_health
+        self.oakUsed = True
+
+class Crab (Context, event.Event):
+    def __init__ (self):
+        super().__init__()
+        self.name = "crab visitor"
+        self.crab = 1
+        self.verbs['chase'] = self
+        self.verbs['feed'] = self
+        self.verbs['help'] = self
+        self.result = {}
+        self.go = False
+
+    def process_verb (self, verb, cmd_list, nouns):
+        if (verb == "chase"):
+            self.go = True
+            r = random.randint(1,10)
+            if (r < 5):
+                self.result["message"] = "the crab digs itself down."
+                if (self.crab > 1):
+                    self.crab = self.crab - 1
+            else:
+                c = random.choice(config.the_player.get_pirates())
+                if (c.isLucky() == True):
+                    self.result["message"] = "luckly, the crab digs itself down."
+                else:
+                    self.result["message"] = c.get_name() + " is attacked by the crab."
+                    if (c.inflict_damage (self.crab, "pinched to death by the crab")):
+                        self.result["message"] = ".. " + c.get_name() + " is pinched to death by the crab!"
+
+        elif (verb == "feed"):
+            self.crab = self.crab + 1
+            self.result["newevents"].append (Crab())
+            self.result["message"] = "the crabs are happy"
+            self.go = True
+        elif (verb == "help"):
+            print ("the crabs will pester you until you feed them or chase them off")
+            self.go = False
+        else:
+            print ("it seems the only options here are to feed or chase")
+            self.go = False
+
+
+
+    def process (self, world):
+
+        self.go = False
+        self.result = {}
+        self.result["newevents"] = [ self ]
+        self.result["message"] = "default message"
+
+        while (self.go == False):
+            print (str (self.crab) + " a crab has appeared what do you want to do?")
+            Player.get_interaction ([self])
+
+        return self.result
