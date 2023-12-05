@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+
 # player - controlling a ship
 #    ship is lost at sea, trying to return home
 #         - dangers and opportunities
